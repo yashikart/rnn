@@ -1,50 +1,50 @@
 # rnn
 
+import yfinance as yf
 import numpy as np
-import matplotlib.pyplot as plt
+from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import SimpleRNN, Dense
-from tensorflow.keras.optimizers import Adam
 
-# ----- Generate Sequential Data (Sine Wave) -----
-def generate_data(seq_length=50):
-    x = np.linspace(0, 50, 500)
-    y = np.sin(x)
-    X, Y = [], []
-    for i in range(len(y) - seq_length):
-        X.append(y[i:i + seq_length])
-        Y.append(y[i + seq_length])
-    return np.array(X), np.array(Y)
+# 1. Download stock data (example: RELIANCE.NS)
+data = yf.download("RELIANCE.NS", start="2018-01-01", end="2024-12-31")
+close_prices = data['Close'].values.reshape(-1, 1)
 
-seq_length = 20
-X, y = generate_data(seq_length)
+# 2. Normalize
+scaler = MinMaxScaler()
+scaled_data = scaler.fit_transform(close_prices)
 
-# Reshape input to (samples, timesteps, features)
-X = X.reshape((X.shape[0], X.shape[1], 1))
-y = y.reshape(-1, 1)
+# 3. Create sequences for RNN
+def create_sequences(dataset, seq_len=60):
+    X, y = [], []
+    for i in range(seq_len, len(dataset)):
+        X.append(dataset[i-seq_len:i])
+        y.append(dataset[i])
+    return np.array(X), np.array(y)
 
-# ----- Build Simple RNN Model -----
+SEQ_LEN = 60
+X, y = create_sequences(scaled_data, SEQ_LEN)
+
+# 4. Train/Test split 80/20
+split = int(len(X) * 0.8)
+X_train, X_test = X[:split], X[split:]
+y_train, y_test = y[:split], y[split:]
+
+# 5. Build a SIMPLE RNN model
 model = Sequential([
-    SimpleRNN(50, activation='tanh', input_shape=(seq_length, 1)),
+    SimpleRNN(50, return_sequences=False, input_shape=(SEQ_LEN, 1)),
     Dense(1)
 ])
+model.compile(optimizer='adam', loss='mse')
 
-# ----- Compile Model -----
-model.compile(optimizer=Adam(learning_rate=0.01), loss='mse')
+# 6. Train
+model.fit(X_train, y_train, epochs=15, batch_size=32)
 
-# ----- Train Model -----
-history = model.fit(X, y, epochs=50, batch_size=16, verbose=0)
+# 7. Predict
+preds = model.predict(X_test)
+preds = scaler.inverse_transform(preds)
 
-# ----- Predict Next Values -----
-preds = model.predict(X)
-
-# ----- Plot the Results -----
-plt.figure(figsize=(8,4))
-plt.plot(y, label='True Sequence', color='blue')
-plt.plot(preds, label='Predicted Sequence', color='red', linestyle='--')
-plt.legend()
-plt.title("Simple RNN - Sequence Prediction")
-plt.show()
+print(preds[:10])
 
 
 
